@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        BatteryReceiver.loadBatteryLevels(this)  // Load previously saved battery levels from disk
 
         tvStatus = findViewById(R.id.tvStatus)
         listView = findViewById(R.id.listView)
@@ -115,7 +116,8 @@ class MainActivity : AppCompatActivity() {
                         DeviceInfo(
                             name = name,
                             address = device.address,
-                            batteryLevel = battery
+                            batteryLevel = battery,
+                            lastSeen = BatteryReceiver.getLastSeen(this, device.address)
                         )
                     )
                 }

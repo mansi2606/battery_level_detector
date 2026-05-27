@@ -15,7 +15,8 @@ import androidx.core.graphics.toColorInt
 data class DeviceInfo(
     val name: String,
     val address: String,
-    val batteryLevel: Int?  // null means unknown
+    val batteryLevel: Int?,  // null means unknown
+    val lastSeen: Long = -1L
 )
 
 class DeviceAdapter(
@@ -40,6 +41,23 @@ class DeviceAdapter(
         // Set device name and address
         tvDeviceName.text = device.name
         tvDeviceAddress.text = device.address
+
+        // Add this TextView to item_device.xml first (see below)
+        val tvLastSeen = view.findViewById<TextView>(R.id.tvLastSeen)
+
+        if (device.lastSeen > 0) {
+            val minutesAgo = (System.currentTimeMillis() - device.lastSeen) / 60000
+            tvLastSeen.text = when {
+                minutesAgo < 1    -> "last seen just now"
+                minutesAgo < 60   -> "last seen ${minutesAgo}m ago"
+                minutesAgo < 1440 -> "last seen ${minutesAgo / 60}h ago"
+                else              -> "last seen ${minutesAgo / 1440}d ago"
+            }
+            tvLastSeen.visibility = View.VISIBLE
+        } else {
+            tvLastSeen.text = ""
+            tvLastSeen.visibility = View.GONE
+        }
 
         // Set battery text and color based on level
         when {

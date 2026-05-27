@@ -44,6 +44,14 @@
             android:textSize="11sp"
             android:textColor="#999999"
             android:text="@string/_00_00_00_00_00_00"/>
+
+        <TextView
+            android:id="@+id/tvLastSeen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#2196F3"
+            android:text="@string/last_seen_just_now"/>
     </LinearLayout>
 
     <!-- Battery level -->
