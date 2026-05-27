@@ -92,59 +92,93 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun showConnectedDevices() {
+        // Always load from disk first
+        BatteryReceiver.loadBatteryLevels(this)
 
-        forceBatteryRefresh()
+        // Force a live refresh if Bluetooth is on
+        if (bluetoothAdapter.isEnabled) {
+            forceBatteryRefresh()
+        }
+
         deviceList.clear()
 
-        try {
-            // Get ALL paired devices
-            val paired: Set<BluetoothDevice> = bluetoothAdapter.bondedDevices
+        // Get paired devices if Bluetooth is on
+        val pairedDevices = mutableMapOf<String, String>()
+        // key = MAC address, value = device name
 
-            if (paired.isEmpty()) {
-                tvStatus.text = "No paired devices found"
-            } else {
-                paired.forEach { device ->
-                    val name = try {
-                        device.name ?: "Unknown Device"
+        if (bluetoothAdapter.isEnabled) {
+            try {
+                bluetoothAdapter.bondedDevices.forEach { device ->
+                    try {
+                        val name = device.name ?: "Unknown Device"
+                        val address = device.address
+                        pairedDevices[address] = name
+
+                        // Save name to disk every time we see it while BT is on
+                        // This is our most reliable opportunity to capture names
+                        if (name != "Unknown Device") {
+                            BatteryReceiver.saveDeviceName(this, address, name)
+                        }
+
                     } catch (e: SecurityException) {
-                        "Unknown Device"
+                        pairedDevices[device.address] = "Unknown Device"
                     }
+                }
+            } catch (e: SecurityException) { }
+        }
 
-                    val battery = BatteryReceiver.batteryLevels[device.address]
+        // Also include any device we have saved battery data for
+        // even if Bluetooth is off right now
+        val allAddresses = (
+                pairedDevices.keys +
+                        BatteryReceiver.batteryLevels.keys
+                ).toSet()
+        // This is the key change — we combine:
+        // 1. currently paired devices (if BT is on)
+        // 2. any device we ever recorded battery for (from disk)
 
-                    deviceList.add(
-                        DeviceInfo(
-                            name = name,
-                            address = device.address,
-                            batteryLevel = battery,
-                            lastSeen = BatteryReceiver.getLastSeen(this, device.address)
-                        )
+        if (allAddresses.isEmpty()) {
+            tvStatus.text = "No devices found. Connect a Bluetooth device first."
+        } else {
+            allAddresses.forEach { address ->
+                // Get name — from live paired list or from saved names
+                val name = pairedDevices[address]
+                    ?: BatteryReceiver.getSavedDeviceName(this, address)
+                    ?: "Unknown Device"
+
+                val battery = BatteryReceiver.batteryLevels[address]
+                val lastSeen = BatteryReceiver.getLastSeen(this, address)
+
+                deviceList.add(
+                    DeviceInfo(
+                        name = name,
+                        address = address,
+                        batteryLevel = battery,
+                        lastSeen = lastSeen
                     )
-                }
-
-                // Sort — low battery devices appear at TOP
-                // devices with unknown battery go to bottom
-                deviceList.sortBy { it.batteryLevel ?: 999 }
-
-                val lowCount = deviceList.count {
-                    it.batteryLevel != null && it.batteryLevel <= 20
-                }
-
-                tvStatus.text = if (lowCount > 0) {
-                    "⚠️ $lowCount device(s) low on battery!"
-                } else {
-                    "✅ ${deviceList.size} device(s) monitored"
-                }
+                )
             }
 
-        } catch (e: SecurityException) {
-            tvStatus.text = "Bluetooth permission denied"
-            Toast.makeText(this, "Please grant Bluetooth permission", Toast.LENGTH_SHORT).show()
+            // Sort — low battery at top, unknown battery at bottom
+            deviceList.sortBy { it.batteryLevel ?: 999 }
+
+            val bluetoothStatus = if (bluetoothAdapter.isEnabled) "ON" else "OFF"
+            val lowCount = deviceList.count {
+                it.batteryLevel != null && it.batteryLevel <= 20
+            }
+
+            tvStatus.text = when {
+                !bluetoothAdapter.isEnabled ->
+                    "📴 Bluetooth off — showing last known data"
+                lowCount > 0 ->
+                    "⚠️ $lowCount device(s) low on battery!"
+                else ->
+                    "✅ ${deviceList.size} device(s) monitored • BT $bluetoothStatus"
+            }
         }
 
         deviceAdapter.notifyDataSetChanged()
     }
-
 
 
     private fun forceBatteryRefresh() {

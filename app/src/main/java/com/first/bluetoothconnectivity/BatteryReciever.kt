@@ -1,11 +1,13 @@
 package com.first.bluetoothconnectivity
 
+import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.content.edit
 
 class BatteryReceiver : BroadcastReceiver() {
@@ -61,8 +63,21 @@ class BatteryReceiver : BroadcastReceiver() {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getLong("lastSeen_$address", -1)
         }
+
+        // Save device name alongside battery level
+        fun saveDeviceName(context: Context, address: String, name: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit { putString("name_$address", name) }
+        }
+
+        // Get saved device name
+        fun getSavedDeviceName(context: Context, address: String): String? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getString("name_$address", null)
+        }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_BATTERY_LEVEL_CHANGED) {
 
@@ -74,8 +89,11 @@ class BatteryReceiver : BroadcastReceiver() {
             }
 
             val batteryLevel = intent.getIntExtra(EXTRA_BATTERY_LEVEL, -1)
-            val deviceName = device?.name ?: "Unknown Device"
             val deviceAddress = device?.address ?: return
+            val deviceName = device.name
+                ?: getSavedDeviceName(context, deviceAddress)
+                ?: "Unknown Device"
+
 
             Log.d("BatteryReceiver", "$deviceName battery: $batteryLevel%")
 
@@ -83,6 +101,7 @@ class BatteryReceiver : BroadcastReceiver() {
                 // Save to both memory AND disk now
                 saveBatteryLevel(context, deviceAddress, batteryLevel)
                 saveLastSeen(context, deviceAddress)
+                saveDeviceName(context, deviceAddress, deviceName)
             }
 
             if (batteryLevel in 1..19) {
